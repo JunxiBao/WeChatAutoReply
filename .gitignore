@@ -1,0 +1,6 @@
+.build/
+.DS_Store
+*.app
+test_*.swift
+explore_*.swift
+gen_icon.swift
