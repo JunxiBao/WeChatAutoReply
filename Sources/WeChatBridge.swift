@@ -161,7 +161,6 @@ class WeChatBridge {
     
     /// Send a message with human-like typing simulation
     func sendMessageHumanLike(_ text: String) -> Bool {
-        // Get WeChat process info
         let apps = NSWorkspace.shared.runningApplications
         guard let weChat = apps.first(where: { $0.localizedName?.contains("WeChat") == true }) else {
             print("[WeChatBridge] WeChat not running")
@@ -169,17 +168,27 @@ class WeChatBridge {
         }
         let weChatPID = weChat.processIdentifier
         
-        // Bring WeChat to front
-        weChat.activate(options: .activateIgnoringOtherApps)
-        Thread.sleep(forTimeInterval: 0.5)
+        // Force WeChat to front
+        weChat.unhide()
+        weChat.activate()
+        Thread.sleep(forTimeInterval: 0.8)
         
-        guard let inputField = findInputField() else {
-            print("[WeChatBridge] No input field found")
+        // Retry finding input field up to 3 times
+        var inputField: AXUIElement?
+        for attempt in 1...3 {
+            inputField = findInputField()
+            if inputField != nil { break }
+            print("[WeChatBridge] Input field not found, retry \(attempt)/3")
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        
+        guard let input = inputField else {
+            print("[WeChatBridge] No input field after 3 retries")
             return false
         }
         
         // Focus the input field via accessibility
-        AXUIElementSetAttributeValue(inputField, "AXFocused" as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(input, "AXFocused" as CFString, kCFBooleanTrue)
         Thread.sleep(forTimeInterval: 0.2)
         
         // Clear existing text - Cmd+A then Delete
