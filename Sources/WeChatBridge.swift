@@ -75,6 +75,7 @@ class WeChatBridge {
         return array
     }
 
+
     private func findElements(_ root: AXUIElement, matching: (AXUIElement) -> Bool, maxDepth: Int = 25) -> [AXUIElement] {
         var results: [AXUIElement] = []
         if matching(root) { results.append(root) }
@@ -130,12 +131,6 @@ class WeChatBridge {
 
         let windowFrame = axFrame(window)
         // AX coordinates are in SCREEN space (absolute pixels).
-        // The chat panel starts ~250px from the window's left edge.
-        // So the panel's left boundary in screen coords = windowFrame.minX + 250.
-        // Use the window's own horizontal center as the left/right threshold:
-        // contact messages appear on the LEFT half, my messages on the RIGHT half.
-        let midXThreshold = windowFrame.midX
-
         // Strategy 1: Find AXList titled "Messages"
         let messageLists = findElements(window, matching: { [weak self] elem in
             guard let self = self else { return false }
@@ -145,7 +140,7 @@ class WeChatBridge {
         }, maxDepth: 25)
 
         if let messageList = messageLists.first {
-            return parseMessageList(messageList, midXThreshold: midXThreshold)
+            return parseMessageList(messageList)
         }
 
         // Strategy 2: Find any AXScrollArea in the right panel and look for message rows
@@ -163,7 +158,7 @@ class WeChatBridge {
                 return self.axStr(elem, "AXRole") == "AXList"
             }, maxDepth: 5)
             if let list = lists.first {
-                let result = parseMessageList(list, midXThreshold: midXThreshold)
+                let result = parseMessageList(list)
                 if !result.isEmpty { return result }
             }
         }
@@ -182,15 +177,14 @@ class WeChatBridge {
             let text = self.axStr(elem, "AXValue") ?? self.axStr(elem, "AXTitle") ?? ""
             guard text.count >= 2 else { return nil }
             let frame = self.axFrame(elem)
-            // Text bubble midX relative to window center: right = mine, left = contact's
-            let isFromMe = frame.midX > midXThreshold
-            return WeChatMessage(text: text, isFromMe: isFromMe)
+            // We can't rely on position anymore, default to false (incoming).
+            return WeChatMessage(text: text, isFromMe: false)
         }
     }
 
     // MARK: - Private: Parse message list rows
 
-    private func parseMessageList(_ list: AXUIElement, midXThreshold: CGFloat) -> [WeChatMessage] {
+    private func parseMessageList(_ list: AXUIElement) -> [WeChatMessage] {
         var messages: [WeChatMessage] = []
 
         for row in axChildren(list) {
@@ -233,10 +227,11 @@ class WeChatBridge {
             } else if descLower.hasPrefix("received") || desc.hasPrefix("收到") {
                 isFromMe = false
             } else {
-                // Fallback: use the TEXT BUBBLE's midX (not the full-width row frame).
-                // My messages appear on the right → midX > window center.
-                // Contact messages appear on the left → midX < window center.
-                isFromMe = textElemFrame.midX > midXThreshold
+                // WeChat Mac workaround: the row is a full-width VoiceOver element (e.g. width 836) or indistinguishable.
+                // We cannot determine sender from coordinates.
+                // Default to incoming (false). AutoReplyEngine will filter out messages the bot sent via `sentMessageTexts`.
+                // Note: User's manual messages will also be seen as incoming unless they pause the bot.
+                isFromMe = false
             }
 
             messages.append(WeChatMessage(text: rowText, isFromMe: isFromMe))

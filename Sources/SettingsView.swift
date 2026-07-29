@@ -108,7 +108,24 @@ struct SettingsView: View {
                     Button(engine.isRunning ? Loc.str("btn.stop") : Loc.str("btn.start")) {
                         saveSettings(); engine.isRunning ? engine.stop() : engine.start()
                     }.buttonStyle(.borderedProminent).controlSize(.regular).keyboardShortcut(.defaultAction)
+
                     if engine.isRunning {
+                        // Manual reply: bypasses fingerprint, replies to latest incoming message
+                        Button {
+                            Task { await engine.manualReply() }
+                        } label: {
+                            HStack(spacing: 4) {
+                                if engine.isManualReplying {
+                                    ProgressView().scaleEffect(0.55).frame(width: 10, height: 10)
+                                } else {
+                                    Image(systemName: "arrowshape.turn.up.left.fill")
+                                }
+                                Text(Loc.str("btn.manual_reply"))
+                            }
+                        }
+                        .disabled(engine.isManualReplying || engine.isProcessingMessage)
+                        .help(Loc.str("btn.manual_reply_hint"))
+
                         Button { Task { await engine.sendFirstMessage() } } label: {
                             HStack(spacing: 3) {
                                 if engine.isSendingFirstMessage { ProgressView().scaleEffect(0.55).frame(width: 10, height: 10) }
@@ -194,21 +211,33 @@ struct SettingsView: View {
     
     var logTab: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(AppLogger.shared.getRecentEntries()) { entry in
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 5) {
-                                Circle().fill(entry.title.contains(Loc.str("log.reply")) || entry.title.contains(Loc.str("log.sent")) ? .green : entry.title.contains(Loc.str("log.error")) ? .red : entry.title.contains(Loc.str("log.skip")) ? .orange : .gray).frame(width: 6, height: 6)
-                                Text(entry.timestamp, style: .time).font(.system(size: 10)).foregroundColor(.secondary)
-                                Text(entry.title).font(.system(size: 10, weight: .medium))
-                            }
-                            Text(entry.message).font(.system(size: 10, design: .monospaced)).lineLimit(3)
-                        }.padding(.horizontal, 12).padding(.vertical, 5)
-                        Divider().padding(.leading, 12)
-                    }
-                }.padding(.vertical, 4)
-            }.background(Color(nsColor: .textBackgroundColor))
+            // Toolbar
+            HStack {
+                Spacer()
+                Text("最近30条日志").font(.caption).foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(nsColor: .windowBackgroundColor))
+            Divider()
+            // Auto-refreshing log list
+            TimelineView(.periodic(from: .now, by: 1.5)) { _ in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(AppLogger.shared.getRecentEntries()) { entry in
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 5) {
+                                    Circle().fill(entry.title.contains(Loc.str("log.reply")) || entry.title.contains(Loc.str("log.sent")) ? .green : entry.title.contains(Loc.str("log.error")) ? .red : entry.title.contains(Loc.str("log.skip")) ? .orange : entry.title.contains("诊断") || entry.title.contains("🔍") ? .blue : .gray).frame(width: 6, height: 6)
+                                    Text(entry.timestamp, style: .time).font(.system(size: 10)).foregroundColor(.secondary)
+                                    Text(entry.title).font(.system(size: 10, weight: .medium))
+                                }
+                                Text(entry.message).font(.system(size: 10, design: .monospaced)).lineLimit(3)
+                            }.padding(.horizontal, 12).padding(.vertical, 5)
+                            Divider().padding(.leading, 12)
+                        }
+                    }.padding(.vertical, 4)
+                }.background(Color(nsColor: .textBackgroundColor))
+            }
         }
     }
     

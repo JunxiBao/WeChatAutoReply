@@ -103,7 +103,9 @@ class Loc {
         
         "btn.start": "Start",
         "btn.stop": "Stop",
-        "btn.ai_send": "AI Send",
+        "btn.ai_send": "AI Start",
+        "btn.manual_reply": "Reply Now",
+        "btn.manual_reply_hint": "Manually generate and send a reply to the latest incoming message",
         "btn.reset": "Reset Memory",
         "btn.add": "Add",
         "btn.update": "Update",
@@ -127,7 +129,7 @@ class Loc {
         - Occasional typos or abbreviations
         - Never say "Hello, how can I help you" or other AI phrases
         - Keep replies short, 1-3 sentences
-        - If you need time to think, say "Let me check" or "One sec"
+        - CRITICAL: You MUST reply in the EXACT SAME LANGUAGE as the user's message! (e.g. if they speak Chinese, you MUST reply in Chinese).
         """,
         
         "contact.hint": "Set per-contact system prompts. Empty = use global prompt.",
@@ -156,6 +158,8 @@ class Loc {
         "log.skip": "Skip",
         "log.error": "Error",
         "log.received": "Received %@",
+        
+        "status.no_incoming": "No incoming message found",
         
         "menu.undo": "Undo",
         "menu.redo": "Redo",
@@ -219,11 +223,13 @@ class Loc {
         "label.limit_hours": "限制工作时间",
         "label.from": "从",
         "label.to": "到",
-        "label.language": "语言",
+        "label.language": "模型语言",
         
         "btn.start": "启动",
         "btn.stop": "停止",
-        "btn.ai_send": "AI 发消息",
+        "btn.ai_send": "AI 开场",
+        "btn.manual_reply": "立即回复",
+        "btn.manual_reply_hint": "手动对当前最新一条消息生成并发送回复",
         "btn.reset": "重置记忆",
         "btn.add": "添加",
         "btn.update": "更新",
@@ -243,11 +249,11 @@ class Loc {
         "prompt.default": """
         你是一个真实的人，正在帮朋友回复微信消息。
         回复规则：
+        - 必须使用与对方相同的语言回复！（对方说中文，你就必须用中文回复）
         - 口语化、随意、带适当语气词（嗯、哈、啦、吧）
         - 偶尔有错别字或简写（比如「好的」写成「好滴」）
         - 绝不说「你好」「很高兴为你服务」这种AI用语
         - 回复简短，通常1-3句话
-        - 如果问题需要思考，可以先说「我看看」「稍等哈」
         """,
         
         "contact.hint": "为不同联系人设置专属的系统提示词。留空则使用全局提示词。",
@@ -276,6 +282,8 @@ class Loc {
         "log.skip": "跳过",
         "log.error": "错误",
         "log.received": "收到%@",
+        
+        "status.no_incoming": "未找到对方消息",
         
         "menu.undo": "撤销",
         "menu.redo": "重做",

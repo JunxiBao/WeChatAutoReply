@@ -15,6 +15,8 @@ class AutoReplyEngine: ObservableObject {
     @Published var currentChatName: String?
     @Published var isSendingFirstMessage = false
     
+    @Published var isManualReplying = false
+    
     private var conversationHistory: [ChatPair] = []
     
     /// Set of message texts we have sent ourselves (trimmed).
@@ -23,11 +25,11 @@ class AutoReplyEngine: ObservableObject {
     
     /// Fingerprint of the last incoming (non-me) message we processed.
     /// Prevents re-processing the same message on the next poll cycle.
-    private var lastIncomingFingerprint: String = ""
+    private var lastSeenAllTexts: [String] = []
     
     /// Guard flag: prevents concurrent checkMessages runs (e.g. timer fires while
     /// a reply is still being generated / sent).
-    private var isProcessingMessage = false
+    @Published private(set) var isProcessingMessage = false
     
     private var pollingTimer: Timer?
     
@@ -69,12 +71,15 @@ class AutoReplyEngine: ObservableObject {
         guard bridge.hasAccessibilityPermission else { statusMessage = Loc.str("status.permission"); bridge.requestAccessibilityPermission(); return }
         guard bridge.isWeChatRunning else { statusMessage = Loc.str("status.wechat_off"); return }
         guard !deepseek.apiKey.isEmpty else { statusMessage = Loc.str("status.api_key"); return }
+        
+        // Baseline the current screen state so we DON'T reply to the old messages already on screen!
+        lastSeenAllTexts = bridge.getCurrentChatMessages().map { $0.text }
+        
         isRunning = true
         statusMessage = Loc.str("status.running")
         pollingTimer = Timer.scheduledTimer(withTimeInterval: pollingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.checkMessages() }
         }
-        Task { await checkMessages() }
     }
     
     func stop() {
@@ -108,44 +113,50 @@ class AutoReplyEngine: ObservableObject {
         let allMessages = bridge.getCurrentChatMessages()
         guard !allMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
-        // Step 1: Filter to only messages from the other person (not from me).
-        // This is the primary defense against replying to our own messages.
+        let currentAllTexts = allMessages.map { $0.text }
+        
+        // 1. Check if chat has actually updated
+        if !hasNewMessagesAtBottom(current: currentAllTexts, lastSeen: lastSeenAllTexts) {
+            statusMessage = Loc.str("status.no_new")
+            return
+        }
+        
+        // Chat updated! Save state
+        lastSeenAllTexts = currentAllTexts
+        
+        // 2. Filter out messages the AI already sent
         let incomingMessages = allMessages.filter { msg in
-            // Primary filter: AX-detected sender
-            guard !msg.isFromMe else { return false }
-            // Secondary filter: check against our sent texts cache (handles edge cases)
             let trimmed = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return !sentMessageTexts.contains(trimmed)
         }
         
         guard !incomingMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
-        // Step 2: Check if there are NEW incoming messages since last poll.
-        // Compute a fingerprint from the last incoming message (text + count).
-        // If the fingerprint hasn't changed, the same messages are still on screen → skip.
-        let fingerprint = computeFingerprint(incomingMessages)
-        guard fingerprint != lastIncomingFingerprint else {
-            statusMessage = Loc.str("status.no_new")
+        // 3. If the VERY LAST message in the chat is from the AI, it means we are waiting for their reply.
+        // We skip processing to prevent replying to older messages that are still on screen.
+        if let rawLastText = currentAllTexts.last?.trimmingCharacters(in: .whitespacesAndNewlines),
+           sentMessageTexts.contains(rawLastText) {
+            statusMessage = Loc.str("status.no_new") // Or "等待对方回复"
             return
         }
         
-        // New incoming messages detected - update fingerprint and process.
-        // Only send the LAST message to the AI — visible messages include old history;
-        // replying to all of them at once would confuse the AI and flood the conversation.
-        lastIncomingFingerprint = fingerprint
+        // 4. Process the latest incoming message
         await processMessage(incomingMessages[incomingMessages.count - 1].text, messageCount: 1)
     }
     
-    /// Compute a stable fingerprint for a list of messages to detect changes.
-    /// Includes ALL visible incoming message texts so that:
-    /// - Same screen content → same fingerprint → skip (no duplicate reply)
-    /// - Contact sends same text again → count changes → different fingerprint → reply
-    /// - Contact sends different text → last text changes → different fingerprint → reply
-    private func computeFingerprint(_ messages: [WeChatMessage]) -> String {
-        // Join all texts with a separator unlikely to appear in normal messages.
-        // Using count + all texts makes it robust against same-last-text collisions.
-        let allTexts = messages.map { $0.text }.joined(separator: "\u{0}")
-        return "\(messages.count)|\(allTexts)"
+    private func hasNewMessagesAtBottom(current: [String], lastSeen: [String]) -> Bool {
+        if current.isEmpty { return false }
+        if lastSeen.isEmpty { return true }
+        if current == lastSeen { return false }
+        
+        // If current is shorter, it might just be older messages scrolled off the top.
+        // Check if current is exactly a suffix of lastSeen.
+        if current.count < lastSeen.count {
+            let suffix = Array(lastSeen.suffix(current.count))
+            if current == suffix { return false }
+        }
+        
+        return true
     }
     
     private func processMessage(_ message: String, messageCount: Int = 1) async {
@@ -190,11 +201,9 @@ class AutoReplyEngine: ObservableObject {
                 conversationHistory.append(ChatPair(incoming: message, outgoing: reply))
                 if conversationHistory.count > 20 { conversationHistory = Array(conversationHistory.suffix(20)) }
                 statusMessage = Loc.f("status.reply", processedCount)
-                // Do NOT reset lastIncomingFingerprint here.
-                // The fingerprint was already set to the current screen state in checkMessages().
-                // Resetting to "" would cause the next poll to re-process the same old
-                // messages still visible on screen. The fingerprint will naturally update
-                // when the contact sends a new message (count or text will change).
+                
+                // Update our state to reflect the new message we just sent
+                lastSeenAllTexts = bridge.getCurrentChatMessages().map { $0.text }
             } else {
                 sentMessageTexts.remove(trimmedReply)
                 statusMessage = Loc.str("status.failed")
@@ -231,7 +240,7 @@ class AutoReplyEngine: ObservableObject {
                 AppLogger.shared.log(Loc.str("log.sent"), message: reply)
                 conversationHistory.append(ChatPair(incoming: "", outgoing: reply))
                 statusMessage = Loc.f("status.sent", processedCount)
-                lastIncomingFingerprint = ""
+                lastSeenAllTexts = bridge.getCurrentChatMessages().map { $0.text }
             } else {
                 sentMessageTexts.remove(trimmedReply)
                 statusMessage = Loc.str("status.failed")
@@ -241,10 +250,45 @@ class AutoReplyEngine: ObservableObject {
         }
     }
     
+    // MARK: - Manual Reply
+
+    /// Manually trigger a reply to the latest incoming message,
+    /// bypassing the fingerprint guard. Useful when auto-reply didn't fire.
+    func manualReply() async {
+        guard !isManualReplying, !isProcessingMessage else { return }
+        guard bridge.hasAccessibilityPermission else { statusMessage = Loc.str("status.permission"); return }
+        guard bridge.isWeChatRunning else { statusMessage = Loc.str("status.wechat_off"); return }
+        guard !deepseek.apiKey.isEmpty else { statusMessage = Loc.str("status.api_key"); return }
+
+        isManualReplying = true
+        defer { isManualReplying = false }
+
+        currentChatName = bridge.getCurrentChatName() ?? Loc.str("status.unknown_chat")
+        let allMessages = bridge.getCurrentChatMessages()
+
+        // Filter to the other person's messages only
+        let incomingMessages = allMessages.filter { msg in
+            guard !msg.isFromMe else { return false }
+            let trimmed = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !sentMessageTexts.contains(trimmed)
+        }
+
+        guard let lastMsg = incomingMessages.last else {
+            statusMessage = Loc.str("status.no_incoming")
+            return
+        }
+
+        // Update state to prevent auto-reply picking it up immediately
+        lastSeenAllTexts = allMessages.map { $0.text }
+        
+        // Process the latest message, ignoring fingerprint
+        await processMessage(lastMsg.text, messageCount: 1)
+    }
+
     func resetConversationHistory() {
         conversationHistory.removeAll()
         sentMessageTexts.removeAll()
-        lastIncomingFingerprint = ""
+        lastSeenAllTexts = []
     }
 }
 
