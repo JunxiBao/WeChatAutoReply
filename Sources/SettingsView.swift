@@ -208,7 +208,7 @@ struct SettingsView: View {
             
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("推荐设置：口语化、带语气词、避免 AI 感")
+                    Text("推荐设置：口语化、带语气词、避免 AI 感。由 AI 自行判断语言。")
                         .font(.caption).foregroundColor(.secondary)
                     
                     Button("使用推荐提示词") {
@@ -220,7 +220,6 @@ struct SettingsView: View {
                         - 绝不说「你好」「很高兴为你服务」这种AI用语
                         - 回复简短，通常1-3句话
                         - 如果问题需要思考，可以先说「我看看」「稍等哈」
-                        - 永远用中文回复
                         """
                         DeepSeekClient.shared.systemPrompt = systemPrompt
                     }
