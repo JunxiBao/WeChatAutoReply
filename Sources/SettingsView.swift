@@ -302,6 +302,10 @@ struct SettingsView: View {
                 } header: {
                     Text("已配置 (\(contactPrompts.count) 个)").fontWeight(.semibold)
                 }
+                Text("点击「编辑」修改已有联系人的提示词，点击「删除」移除")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
             }
         }
         .formStyle(.grouped)
