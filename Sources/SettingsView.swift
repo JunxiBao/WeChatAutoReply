@@ -21,6 +21,8 @@ struct SettingsView: View {
                 .tabItem { Label("通用", systemImage: "gearshape") }
             promptTab
                 .tabItem { Label("提示词", systemImage: "text.quote") }
+            contactPromptTab
+                .tabItem { Label("联系人", systemImage: "person.text.rectangle") }
             logTab
                 .tabItem { Label("日志", systemImage: "list.bullet.rectangle") }
         }
@@ -226,6 +228,75 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+    
+    // MARK: - Contact Prompt Tab
+    
+    @State private var contactPrompts: [String: String] = [:]
+    @State private var newContactName: String = ""
+    @State private var newContactPrompt: String = ""
+    
+    var contactPromptTab: some View {
+        Form {
+            Section {
+                Text("为不同联系人设置专属的系统提示词。留空则使用全局提示词。")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            
+            Section {
+                HStack {
+                    TextField("联系人名称", text: $newContactName)
+                        .textFieldStyle(.roundedBorder)
+                    Button("添加") {
+                        let name = newContactName.trimmingCharacters(in: .whitespaces)
+                        let prompt = newContactPrompt.trimmingCharacters(in: .whitespaces)
+                        guard !name.isEmpty, !prompt.isEmpty else { return }
+                        contactPrompts[name] = prompt
+                        saveContactPrompts()
+                        newContactName = ""
+                        newContactPrompt = ""
+                    }
+                    .disabled(newContactName.trimmingCharacters(in: .whitespaces).isEmpty ||
+                              newContactPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                TextEditor(text: $newContactPrompt)
+                    .font(.system(size: 11, design: .monospaced))
+                    .frame(minHeight: 60)
+            } header: {
+                Text("新增联系人提示词").fontWeight(.semibold)
+            }
+            
+            if !contactPrompts.isEmpty {
+                Section {
+                    ForEach(Array(contactPrompts.keys.sorted()), id: \.self) { name in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(name).fontWeight(.medium)
+                                Spacer()
+                                Button("删除") {
+                                    contactPrompts.removeValue(forKey: name)
+                                    saveContactPrompts()
+                                }
+                                .foregroundColor(.red)
+                            }
+                            Text(contactPrompts[name] ?? "")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(3)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text("已配置 (\(contactPrompts.count) 个)").fontWeight(.semibold)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { contactPrompts = DeepSeekClient.shared.contactPrompts }
+    }
+    
+    private func saveContactPrompts() {
+        DeepSeekClient.shared.contactPrompts = contactPrompts
     }
     
     // MARK: - Log Tab

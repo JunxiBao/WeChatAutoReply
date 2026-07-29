@@ -26,6 +26,27 @@ class DeepSeekClient {
         set { UserDefaults.standard.set(newValue, forKey: "reply_system_prompt") }
     }
     
+    /// Per-contact custom system prompts
+    var contactPrompts: [String: String] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: "contact_prompts"),
+                  let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return [:]
+            }
+            return dict
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: "contact_prompts")
+            }
+        }
+    }
+    
+    /// Get the effective system prompt for a contact
+    func effectivePrompt(for contactName: String) -> String {
+        return contactPrompts[contactName] ?? systemPrompt
+    }
+    
     /// Generate a reply for a given message
     func generateReply(
         for message: String,
@@ -37,7 +58,7 @@ class DeepSeekClient {
         }
         
         var messages: [[String: String]] = [
-            ["role": "system", "content": systemPrompt]
+            ["role": "system", "content": effectivePrompt(for: contactName)]
         ]
         
         // Add conversation history for context
@@ -49,7 +70,7 @@ class DeepSeekClient {
         }
         
         // Add the current message
-        messages.append(["role": "user", "content": "收到的消息（来自 \(contactName)）：\(message)\n\n请生成回复："])
+        messages.append(["role": "user", "content": "Incoming message from \(contactName): \(message)\n\nGenerate a reply following the system instructions above."])
         
         let requestBody: [String: Any] = [
             "model": model,
@@ -108,7 +129,7 @@ class DeepSeekClient {
         """
         
         let messages: [[String: String]] = [
-            ["role": "system", "content": systemPrompt],
+            ["role": "system", "content": effectivePrompt(for: contactName)],
             ["role": "user", "content": prompt]
         ]
         
