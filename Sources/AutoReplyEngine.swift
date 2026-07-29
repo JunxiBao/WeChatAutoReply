@@ -18,7 +18,7 @@ class AutoReplyEngine: ObservableObject {
     private var conversationHistory: [ChatPair] = []
     private var lastSeenMessages: [String] = []
     private var lastSeenSet: Set<String> = []
-    private let maxSeenMessages = 50
+    private let maxSeenMessages = 20
     private var sentMessageTexts: Set<String> = []
     private var isFirstPoll = true
     private var pollingTimer: Timer?
