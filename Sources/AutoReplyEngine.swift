@@ -96,11 +96,11 @@ class AutoReplyEngine: ObservableObject {
         
         let newMessages = rawMessages.filter { !lastSeenMessageTexts.contains($0) }
         for msg in rawMessages { lastSeenMessageTexts.insert(msg) }
-        if lastSeenMessageTexts.count > 300 { lastSeenMessageTexts = Set(rawMessages.suffix(100)) }
         
         let filtered = newMessages.filter { text in
             let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            for sent in sentMessageTexts { if t == sent { return false }; if sent.count >= 6 && sent.contains(t) { return false } }
+            // Exact match only — fuzzy matching was filtering legitimate replies
+            if sentMessageTexts.contains(t) { return false }
             if isTimestamp(t) { return false }
             let noise = ["你撤回了一条消息","对方撤回了一条消息","你已添加了","Accepted WeChat Transfer","Transfer","Stuck on Top","Mute Notifications"]
             for p in noise { if text.contains(p) { return false } }
@@ -140,8 +140,8 @@ class AutoReplyEngine: ObservableObject {
             }
             guard isRunning else { return }
             
-            // Mark as ours BEFORE typing to prevent race condition
-            sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
+            let trimmedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+            sentMessageTexts.insert(trimmedReply)
             
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
@@ -151,7 +151,10 @@ class AutoReplyEngine: ObservableObject {
                 conversationHistory.append(ChatPair(incoming: message, outgoing: reply))
                 if conversationHistory.count > 20 { conversationHistory = Array(conversationHistory.suffix(20)) }
                 statusMessage = Loc.f("status.reply", processedCount)
-            } else { statusMessage = Loc.str("status.failed") }
+            } else {
+                sentMessageTexts.remove(trimmedReply)
+                statusMessage = Loc.str("status.failed")
+            }
         } catch {
             statusMessage = Loc.f("status.error", error.localizedDescription)
             AppLogger.shared.log(Loc.str("log.error"), message: error.localizedDescription)

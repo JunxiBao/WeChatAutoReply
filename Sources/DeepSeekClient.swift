@@ -126,7 +126,6 @@ class DeepSeekClient {
         - 可以根据最近聊天内容来接话（如果最近在聊某个话题就接着聊）
         - 如果没有上下文，就发个日常问候或分享一件小事
         - 简短，1-2句话
-        - 用中文
         """
         
         let messages: [[String: String]] = [
