@@ -16,11 +16,7 @@ class AutoReplyEngine: ObservableObject {
     @Published var isSendingFirstMessage = false
     
     private var conversationHistory: [ChatPair] = []
-    private var lastSeenMessages: [String] = []
-    private var lastSeenSet: Set<String> = []
-    private let maxSeenMessages = 20
     private var sentMessageTexts: Set<String> = []
-    private var isFirstPoll = true
     private var pollingTimer: Timer?
     
     // MARK: - Settings
@@ -61,7 +57,7 @@ class AutoReplyEngine: ObservableObject {
         guard bridge.hasAccessibilityPermission else { statusMessage = Loc.str("status.permission"); bridge.requestAccessibilityPermission(); return }
         guard bridge.isWeChatRunning else { statusMessage = Loc.str("status.wechat_off"); return }
         guard !deepseek.apiKey.isEmpty else { statusMessage = Loc.str("status.api_key"); return }
-        isRunning = true; isFirstPoll = true
+        isRunning = true
         statusMessage = Loc.str("status.running")
         pollingTimer = Timer.scheduledTimer(withTimeInterval: pollingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.checkMessages() }
@@ -87,35 +83,21 @@ class AutoReplyEngine: ObservableObject {
         lastCheckTime = Date()
         currentChatName = bridge.getCurrentChatName() ?? Loc.str("status.unknown_chat")
         
-        let rawMessages = bridge.getCurrentChatMessages()
-        if isFirstPoll {
-            isFirstPoll = false
-            for msg in rawMessages { addSeen(msg) }
-            statusMessage = Loc.f("status.history", rawMessages.count)
-            return
+        var messages = bridge.getCurrentChatMessages()
+        guard !messages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
+        
+        // Only filter our own sent messages, nothing else
+        messages = messages.filter { msg in
+            let t = msg.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !sentMessageTexts.contains(t)
         }
-        guard !rawMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
+        guard !messages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
-        let newMessages = rawMessages.filter { !lastSeenSet.contains($0) }
-        for msg in rawMessages { addSeen(msg) }
-        
-        let filtered = newMessages.filter { text in
-            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Exact match only — fuzzy matching was filtering legitimate replies
-            if sentMessageTexts.contains(t) { return false }
-            if isTimestamp(t) { return false }
-            let noise = ["你撤回了一条消息","对方撤回了一条消息","你已添加了","Accepted WeChat Transfer","Transfer","Stuck on Top","Mute Notifications"]
-            for p in noise { if text.contains(p) { return false } }
-            if text.count < 3 || text.hasPrefix("【自动回复") { return false }
-            return true
-        }
-        guard !filtered.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
-        
-        if filtered.count > 1 {
-            statusMessage = Loc.f("status.multi_msgs", filtered.count)
-            await processMessage(filtered.joined(separator: "\n---\n"), messageCount: filtered.count)
+        if messages.count > 1 {
+            statusMessage = Loc.f("status.multi_msgs", messages.count)
+            await processMessage(messages.joined(separator: "\n---\n"), messageCount: messages.count)
         } else {
-            await processMessage(filtered[0], messageCount: 1)
+            await processMessage(messages[0], messageCount: 1)
         }
     }
     
@@ -199,34 +181,8 @@ class AutoReplyEngine: ObservableObject {
     
     func resetConversationHistory() {
         conversationHistory.removeAll()
-        lastSeenMessages.removeAll()
-        lastSeenSet.removeAll()
         sentMessageTexts.removeAll()
-        isFirstPoll = true
     }
-    
-    private func addSeen(_ msg: String) {
-        if lastSeenSet.contains(msg) { return }
-        lastSeenMessages.append(msg)
-        lastSeenSet.insert(msg)
-        while lastSeenMessages.count > maxSeenMessages {
-            let removed = lastSeenMessages.removeFirst()
-            lastSeenSet.remove(removed)
-        }
-    }
-}
-
-// MARK: - Helpers
-
-private func isTimestamp(_ text: String) -> Bool {
-    let t = text.trimmingCharacters(in: .whitespaces)
-    guard t.count <= 30 else { return false }
-    if t.range(of: #"^\d{1,2}:\d{2}$"#, options: .regularExpression) != nil { return true }
-    if t.range(of: #"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+\d{1,2}:\d{2}$"#, options: .regularExpression) != nil { return true }
-    if t.range(of: #"^(Yesterday|Today|昨天|今天|前天)\s+\d{1,2}:\d{2}$"#, options: .regularExpression) != nil { return true }
-    if t.range(of: #"^\d{2}/\d{2}$"#, options: .regularExpression) != nil { return true }
-    if t.count <= 5 && t.contains(":") { return true }
-    return false
 }
 
 // MARK: - App Logger
