@@ -286,7 +286,15 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { contactPrompts = DeepSeekClient.shared.contactPrompts }
+        .onAppear {
+            contactPrompts = DeepSeekClient.shared.contactPrompts
+            // Pre-fill with current WeChat chat contact
+            if let name = engine.currentChatName, !name.isEmpty {
+                newContactName = name
+            } else if let name = WeChatBridge.shared.getCurrentChatName(), !name.isEmpty {
+                newContactName = name
+            }
+        }
     }
     
     private func saveContactPrompts() {
