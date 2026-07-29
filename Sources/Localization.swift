@@ -69,6 +69,10 @@ class Loc {
         "status.error": "Error: %@",
         "status.generating": "Generating opener...",
         
+        "status.unknown_chat": "Unknown Chat",
+        "status.n_msgs": "%d messages",
+        "status.msg": "message",
+        
         "tab.general": "General",
         "tab.prompt": "Prompt",
         "tab.contacts": "Contacts",
@@ -177,6 +181,10 @@ class Loc {
         "status.failed": "发送失败",
         "status.error": "错误: %@",
         "status.generating": "生成开场白...",
+        
+        "status.unknown_chat": "未知聊天",
+        "status.n_msgs": "%d条消息",
+        "status.msg": "消息",
         
         "tab.general": "通用",
         "tab.prompt": "提示词",
