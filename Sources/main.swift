@@ -12,18 +12,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusUpdateTimer: Timer?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Show in Dock (regular app), don't quit when window closes
         NSApp.setActivationPolicy(.regular)
+        setupMainMenu()
         setupMenuBar()
         
-        // Always open settings on launch
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.openSettings()
         }
-        
-        // Only show accessibility alert if user is trying to use the app
-        // (not on every launch, since re-signing resets permission)
     }
+    
+    // MARK: - Main Menu (enables Cmd+A/C/V/X/Z in all text fields)
+    
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+        
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "关于微信自动回复", action: nil, keyEquivalent: ""))
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(title: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let appItem = NSMenuItem()
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+        
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "撤销", action: #selector(UndoAction.undo), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "重做", action: #selector(RedoAction.redo), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "拷贝", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        let editItem = NSMenuItem()
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        
+        NSApp.mainMenu = mainMenu
+    }
+    
+    // Dummy classes for Undo/Redo selectors
+    @objc private class UndoAction: NSObject {
+        @objc static func undo(_ sender: Any?) {
+            NSApp.sendAction(Selector(("undo:")), to: nil, from: sender)
+        }
+    }
+    @objc private class RedoAction: NSObject {
+        @objc static func redo(_ sender: Any?) {
+            NSApp.sendAction(Selector(("redo:")), to: nil, from: sender)
+        }
+    }
+    
+    // Only show accessibility alert when user tries to start
+    // (not on every launch, since re-signing resets permission)
     
     // Check permission quietly, only show alert when user tries to start
     func ensureAccessibilityPermission() -> Bool {
