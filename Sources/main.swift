@@ -5,7 +5,7 @@ import AppKit
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem!
+    private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private let engine = AutoReplyEngine.shared
     private let bridge = WeChatBridge.shared
@@ -36,10 +36,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // MARK: - Menu Bar
     
+    var hideMenuBarIcon: Bool {
+        get { UserDefaults.standard.bool(forKey: "hide_menu_bar_icon") }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "hide_menu_bar_icon")
+            if newValue { removeMenuBar() } else { if statusItem == nil { setupMenuBar() } }
+        }
+    }
+    
     private func setupMenuBar() {
+        guard !hideMenuBarIcon else { return }
+        guard statusItem == nil else { return }
+        
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
-        if let button = statusItem.button {
+        if let button = statusItem?.button {
             button.title = "💬"
             button.toolTip = "微信自动回复"
         }
@@ -64,7 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem(title: "退出", action: #selector(quit), keyEquivalent: "q"))
         
-        statusItem.menu = menu
+        statusItem?.menu = menu
         
         statusUpdateTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -73,15 +84,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    private func removeMenuBar() {
+        statusUpdateTimer?.invalidate()
+        statusUpdateTimer = nil
+        if let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+    
     private func updateMenuStatus(_ toggleItem: NSMenuItem, _ statusMenuItem: NSMenuItem) {
         toggleItem.title = engine.isRunning ? "停止自动回复" : "启动自动回复"
         
         if engine.isRunning {
             statusMenuItem.title = "状态: 运行中 · 已回复 \(engine.processedCount) 条"
-            if let button = statusItem.button { button.title = "🟢" }
+            if let button = statusItem?.button { button.title = "🟢" }
         } else {
             statusMenuItem.title = "状态: 已停止"
-            if let button = statusItem.button { button.title = "💬" }
+            if let button = statusItem?.button { button.title = "💬" }
         }
     }
     

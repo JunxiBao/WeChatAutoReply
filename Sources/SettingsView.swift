@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var workHoursStart: Double = 9
     @State private var workHoursEnd: Double = 23
     @State private var showAPIKey: Bool = false
+    @State private var hideMenuBar: Bool = UserDefaults.standard.bool(forKey: "hide_menu_bar_icon")
     
     var body: some View {
         TabView {
@@ -106,6 +107,13 @@ struct SettingsView: View {
             
             // ── 行为 ──
             Section {
+                Toggle("隐藏菜单栏图标", isOn: $hideMenuBar)
+                    .onChange(of: hideMenuBar) { _, v in
+                        if let delegate = NSApp.delegate as? AppDelegate {
+                            delegate.hideMenuBarIcon = v
+                        }
+                    }
+                
                 LabeledContent("跳过概率") {
                     HStack(spacing: 6) {
                         Slider(value: $skipProbability, in: 0...0.8, step: 0.05)
