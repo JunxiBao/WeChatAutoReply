@@ -383,7 +383,20 @@ struct StatusBadge: View {
     }
 }
 
-// MARK: - Pasteable Secure Field (Cmd+V, Cmd+A, Cmd+C work)
+// MARK: - Pasteable Secure Field (Cmd+V, Cmd+A, Cmd+C all work)
+
+class SecureTextField: NSSecureTextField {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Let AppKit handle all standard edit commands (Cmd+A, Cmd+C, Cmd+V, Cmd+X)
+        if event.modifierFlags.contains(.command) {
+            let char = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            if ["a", "c", "v", "x"].contains(char) {
+                return super.performKeyEquivalent(with: event)
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
 
 struct PasteableSecureField: NSViewRepresentable {
     let placeholder: String
@@ -394,8 +407,8 @@ struct PasteableSecureField: NSViewRepresentable {
         self._text = text
     }
     
-    func makeNSView(context: Context) -> NSSecureTextField {
-        let field = NSSecureTextField()
+    func makeNSView(context: Context) -> SecureTextField {
+        let field = SecureTextField()
         field.placeholderString = placeholder
         field.delegate = context.coordinator
         field.isBordered = true
@@ -404,7 +417,7 @@ struct PasteableSecureField: NSViewRepresentable {
         return field
     }
     
-    func updateNSView(_ nsView: NSSecureTextField, context: Context) {
+    func updateNSView(_ nsView: SecureTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
         }
