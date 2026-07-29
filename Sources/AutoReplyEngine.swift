@@ -140,11 +140,13 @@ class AutoReplyEngine: ObservableObject {
             }
             guard isRunning else { return }
             
+            // Mark as ours BEFORE typing to prevent race condition
+            sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
+            
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
             if success {
                 processedCount += 1
-                sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
                 AppLogger.shared.log(Loc.str("log.reply"), message: reply)
                 conversationHistory.append(ChatPair(incoming: message, outgoing: reply))
                 if conversationHistory.count > 20 { conversationHistory = Array(conversationHistory.suffix(20)) }
@@ -173,15 +175,18 @@ class AutoReplyEngine: ObservableObject {
                 statusMessage = Loc.f("status.countdown", remaining)
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
+            sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
             if success {
                 processedCount += 1
-                sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
                 AppLogger.shared.log(Loc.str("log.sent"), message: reply)
                 conversationHistory.append(ChatPair(incoming: "", outgoing: reply))
                 statusMessage = Loc.f("status.sent", processedCount)
-            } else { statusMessage = Loc.str("status.failed") }
+            } else {
+                sentMessageTexts.remove(reply.trimmingCharacters(in: .whitespacesAndNewlines))
+                statusMessage = Loc.str("status.failed")
+            }
         } catch {
             statusMessage = Loc.f("status.error", error.localizedDescription)
         }
