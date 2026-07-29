@@ -12,7 +12,7 @@ class AutoReplyEngine: ObservableObject {
     private let deepseek = DeepSeekClient.shared
     
     @Published var isRunning = false
-    @Published var statusMessage = "就绪"
+    @Published var statusMessage = Loc.str("status.ready")
     @Published var lastCheckTime: Date?
     @Published var processedCount = 0
     @Published var currentChatName: String?
@@ -74,13 +74,13 @@ class AutoReplyEngine: ObservableObject {
     
     func start() {
         guard !isRunning else { return }
-        guard bridge.hasAccessibilityPermission else { statusMessage = "需要辅助功能权限"; bridge.requestAccessibilityPermission(); return }
-        guard bridge.isWeChatRunning else { statusMessage = "微信未运行"; return }
-        guard !deepseek.apiKey.isEmpty else { statusMessage = "请配置 API Key"; return }
+        guard bridge.hasAccessibilityPermission else { statusMessage = Loc.str("status.permission"); bridge.requestAccessibilityPermission(); return }
+        guard bridge.isWeChatRunning else { statusMessage = Loc.str("status.wechat_off"); return }
+        guard !deepseek.apiKey.isEmpty else { statusMessage = Loc.str("status.api_key"); return }
         
         isRunning = true
-        isFirstPoll = true  // Reset first poll flag
-        statusMessage = "运行中..."
+        isFirstPoll = true
+        statusMessage = Loc.str("status.running")
         
         pollingTimer = Timer.scheduledTimer(withTimeInterval: pollingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.checkMessages() }
@@ -92,7 +92,7 @@ class AutoReplyEngine: ObservableObject {
         isRunning = false
         pollingTimer?.invalidate()
         pollingTimer = nil
-        statusMessage = "已停止"
+        statusMessage = Loc.str("status.stopped")
     }
     
     // MARK: - Message Checking
@@ -120,11 +120,11 @@ class AutoReplyEngine: ObservableObject {
         if isFirstPoll {
             isFirstPoll = false
             for msg in rawMessages { lastSeenMessageTexts.insert(msg) }
-            statusMessage = "就绪 (已加载 \(rawMessages.count) 条历史)"
-            return
+            statusMessage = Loc.f("status.history", rawMessages.count)
+                return
         }
         
-        guard !rawMessages.isEmpty else { statusMessage = "无新消息"; return }
+        guard !rawMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
         // Detect new messages
         let newMessages = rawMessages.filter { !lastSeenMessageTexts.contains($0) }

@@ -94,7 +94,16 @@ struct SettingsView: View {
             
             // ── 行为 ──
             Section {
-                Toggle("隐藏菜单栏图标", isOn: $hideMenuBar)
+                Picker(Loc.str("label.language"), selection: Binding(
+                    get: { Loc.language },
+                    set: { Loc.language = $0 }
+                )) {
+                    ForEach(AppLanguage.allCases, id: \.self) { lang in
+                        Text(lang.displayName).tag(lang)
+                    }
+                }
+                
+                Toggle(Loc.str("label.hide_menubar"), isOn: $hideMenuBar)
                     .onChange(of: hideMenuBar) { _, v in
                         if let delegate = NSApp.delegate as? AppDelegate {
                             delegate.hideMenuBarIcon = v
