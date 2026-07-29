@@ -48,10 +48,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !hideMenuBarIcon else { return }
         guard statusItem == nil else { return }
         
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         
         if let button = statusItem?.button {
-            button.title = "💬"
+            button.image = NSImage(systemSymbolName: "bubble.left.fill", accessibilityDescription: "微信自动回复")
             button.toolTip = "微信自动回复"
         }
         
@@ -98,10 +98,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         if engine.isRunning {
             statusMenuItem.title = "状态: 运行中 · 已回复 \(engine.processedCount) 条"
-            if let button = statusItem?.button { button.title = "🟢" }
+            statusItem?.button?.image = NSImage(systemSymbolName: "bubble.left.and.bubble.right.fill", accessibilityDescription: nil)
         } else {
             statusMenuItem.title = "状态: 已停止"
-            if let button = statusItem?.button { button.title = "💬" }
+            statusItem?.button?.image = NSImage(systemSymbolName: "bubble.left.fill", accessibilityDescription: nil)
         }
     }
     
