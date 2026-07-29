@@ -100,7 +100,7 @@ class AutoReplyEngine: ObservableObject {
         
         let filtered = newMessages.filter { text in
             let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            for sent in sentMessageTexts { if t == sent { return false }; if sent.count >= 6 && (t.contains(sent) || sent.contains(t)) { return false } }
+            for sent in sentMessageTexts { if t == sent { return false }; if sent.count >= 6 && sent.contains(t) { return false } }
             if isTimestamp(t) { return false }
             let noise = ["你撤回了一条消息","对方撤回了一条消息","你已添加了","Accepted WeChat Transfer","Transfer","Stuck on Top","Mute Notifications"]
             for p in noise { if text.contains(p) { return false } }
