@@ -27,6 +27,7 @@ class Loc {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "app_language")
+            NotificationCenter.default.post(name: .languageChanged, object: nil)
         }
     }
     
@@ -276,3 +277,9 @@ class Loc {
         String(format: str(key), arguments: args)
     }
 }
+
+extension Notification.Name {
+    static let languageChanged = Notification.Name("languageChanged")
+}
+
+// MARK: - Strings

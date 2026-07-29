@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var newContactName: String = ""
     @State private var newContactPrompt: String = ""
     @State private var editingContactName: String? = nil
+    @State private var refreshID = UUID()
     
     var body: some View {
         TabView {
@@ -24,8 +25,12 @@ struct SettingsView: View {
             contactPromptTab.tabItem { Label(Loc.str("tab.contacts"), systemImage: "person.text.rectangle") }
             logTab.tabItem { Label(Loc.str("tab.logs"), systemImage: "list.bullet.rectangle") }
         }
+        .id(refreshID)
         .frame(minWidth: 440, idealWidth: 480, minHeight: 380, idealHeight: 440)
         .onAppear { loadSettings() }
+        .onReceive(NotificationCenter.default.publisher(for: .languageChanged)) { _ in
+            refreshID = UUID()
+        }
     }
     
     // MARK: - General
