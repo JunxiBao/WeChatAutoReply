@@ -17,6 +17,7 @@ class AutoReplyEngine: ObservableObject {
     
     private var conversationHistory: [ChatPair] = []
     private var sentMessageTexts: Set<String> = []
+    private var lastSentMessage: String = ""  // raw text of last message we sent
     private var pollingTimer: Timer?
     
     // MARK: - Settings
@@ -89,7 +90,12 @@ class AutoReplyEngine: ObservableObject {
         // Only filter our own sent messages, nothing else
         messages = messages.filter { msg in
             let t = msg.trimmingCharacters(in: .whitespacesAndNewlines)
-            return !sentMessageTexts.contains(t)
+            if sentMessageTexts.contains(t) { return false }
+            // Also check the raw last message (belt and suspenders)
+            if !lastSentMessage.isEmpty && (msg == lastSentMessage || t == lastSentMessage.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return false
+            }
+            return true
         }
         guard !messages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
@@ -126,6 +132,7 @@ class AutoReplyEngine: ObservableObject {
             
             let trimmedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
             sentMessageTexts.insert(trimmedReply)
+            lastSentMessage = reply
             
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
@@ -137,6 +144,7 @@ class AutoReplyEngine: ObservableObject {
                 statusMessage = Loc.f("status.reply", processedCount)
             } else {
                 sentMessageTexts.remove(trimmedReply)
+                lastSentMessage = ""
                 statusMessage = Loc.str("status.failed")
             }
         } catch {
@@ -163,6 +171,7 @@ class AutoReplyEngine: ObservableObject {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
             sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
+            lastSentMessage = reply
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
             if success {
@@ -172,6 +181,7 @@ class AutoReplyEngine: ObservableObject {
                 statusMessage = Loc.f("status.sent", processedCount)
             } else {
                 sentMessageTexts.remove(reply.trimmingCharacters(in: .whitespacesAndNewlines))
+                lastSentMessage = ""
                 statusMessage = Loc.str("status.failed")
             }
         } catch {
@@ -182,6 +192,7 @@ class AutoReplyEngine: ObservableObject {
     func resetConversationHistory() {
         conversationHistory.removeAll()
         sentMessageTexts.removeAll()
+        lastSentMessage = ""
     }
 }
 
