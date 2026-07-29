@@ -263,6 +263,11 @@ struct PasteableSecureField: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     class Coordinator: NSObject, NSTextFieldDelegate {
         let parent: PasteableSecureField; init(_ parent: PasteableSecureField) { self.parent = parent }
-        func controlTextDidChange(_ obj: Notification) { if let f = obj.object as? NSTextField { parent.text = f.stringValue } }
+        func controlTextDidChange(_ obj: Notification) {
+            if let f = obj.object as? NSTextField {
+                parent.text = f.stringValue
+                DeepSeekClient.shared.apiKey = f.stringValue
+            }
+        }
     }
 }
