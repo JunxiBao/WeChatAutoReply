@@ -95,6 +95,17 @@ if [[ "${1:-}" == "--install" ]]; then
     cp -R "$BUILD_DIR/$APP_NAME.app" "/Applications/"
     echo "Installed to /Applications/$APP_NAME.app"
     
+    # Set custom icon (survives rebuilds since it's in resource fork)
+    if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
+        ICON_PATH="$PROJECT_DIR/Resources/AppIcon.icns"
+    elif [ -f "/Users/junxibao/Desktop/Subject.png" ]; then
+        ICON_PATH="/Users/junxibao/Desktop/Subject.png"
+    fi
+    if [ -n "${ICON_PATH:-}" ]; then
+        swift -e "import Cocoa; NSWorkspace.shared.setIcon(NSImage(contentsOfFile: \"$ICON_PATH\")!, forFile: \"/Applications/$APP_NAME.app\", options: [])" 2>/dev/null
+        echo "Icon set from $ICON_PATH"
+    fi
+    
     if [ "$CURRENT_HASH" != "$PREV_HASH" ] || [ -z "$PREV_HASH" ]; then
         echo ""
         echo "⚠️  Source changed — if you already granted permission, it should survive."
