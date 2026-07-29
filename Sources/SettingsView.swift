@@ -229,6 +229,7 @@ struct SettingsView: View {
     @State private var contactPrompts: [String: String] = [:]
     @State private var newContactName: String = ""
     @State private var newContactPrompt: String = ""
+    @State private var editingContactName: String? = nil
     
     var contactPromptTab: some View {
         Form {
@@ -241,23 +242,31 @@ struct SettingsView: View {
                 HStack {
                     TextField("联系人名称", text: $newContactName)
                         .textFieldStyle(.roundedBorder)
-                    Button("添加") {
-                        let name = newContactName.trimmingCharacters(in: .whitespaces)
+                        .disabled(editingContactName != nil)
+                    Button(editingContactName != nil ? "更新" : "添加") {
+                        let name = (editingContactName ?? newContactName).trimmingCharacters(in: .whitespaces)
                         let prompt = newContactPrompt.trimmingCharacters(in: .whitespaces)
                         guard !name.isEmpty, !prompt.isEmpty else { return }
                         contactPrompts[name] = prompt
                         saveContactPrompts()
                         newContactName = ""
                         newContactPrompt = ""
+                        editingContactName = nil
                     }
-                    .disabled(newContactName.trimmingCharacters(in: .whitespaces).isEmpty ||
-                              newContactPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(newContactPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if editingContactName != nil {
+                        Button("取消") {
+                            newContactName = ""
+                            newContactPrompt = ""
+                            editingContactName = nil
+                        }
+                    }
                 }
                 TextEditor(text: $newContactPrompt)
                     .font(.system(size: 11, design: .monospaced))
                     .frame(minHeight: 60)
             } header: {
-                Text("新增联系人提示词").fontWeight(.semibold)
+                Text(editingContactName != nil ? "编辑: \(editingContactName!)" : "新增联系人提示词").fontWeight(.semibold)
             }
             
             if !contactPrompts.isEmpty {
@@ -267,9 +276,19 @@ struct SettingsView: View {
                             HStack {
                                 Text(name).fontWeight(.medium)
                                 Spacer()
+                                Button("编辑") {
+                                    newContactName = name
+                                    newContactPrompt = contactPrompts[name] ?? ""
+                                    editingContactName = name
+                                }
                                 Button("删除") {
                                     contactPrompts.removeValue(forKey: name)
                                     saveContactPrompts()
+                                    if editingContactName == name {
+                                        newContactName = ""
+                                        newContactPrompt = ""
+                                        editingContactName = nil
+                                    }
                                 }
                                 .foregroundColor(.red)
                             }
