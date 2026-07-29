@@ -13,7 +13,6 @@ struct SettingsView: View {
     @State private var workHoursEnabled: Bool = false
     @State private var workHoursStart: Double = 9
     @State private var workHoursEnd: Double = 23
-    @State private var showAPIKey: Bool = false
     @State private var hideMenuBar: Bool = UserDefaults.standard.bool(forKey: "hide_menu_bar_icon")
     
     var body: some View {
@@ -38,21 +37,9 @@ struct SettingsView: View {
             // ── API ──
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        if showAPIKey {
-                            TextField("sk-...", text: $apiKey)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11, design: .monospaced))
-                        } else {
-                            SecureField("sk-...", text: $apiKey)
-                        }
-                        Button { showAPIKey.toggle() } label: {
-                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                                .font(.system(size: 13))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .onChange(of: apiKey) { _, v in DeepSeekClient.shared.apiKey = v }
+                    PasteableSecureField("sk-...", text: $apiKey)
+                        .frame(height: 22)
+                        .onChange(of: apiKey) { _, v in DeepSeekClient.shared.apiKey = v }
                     
                     Label("从 platform.deepseek.com 获取", systemImage: "info.circle")
                         .font(.caption)
@@ -384,6 +371,49 @@ struct StatusBadge: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
+        }
+    }
+}
+
+// MARK: - Pasteable Secure Field (Cmd+V, Cmd+A, Cmd+C work)
+
+struct PasteableSecureField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    
+    init(_ placeholder: String, text: Binding<String>) {
+        self.placeholder = placeholder
+        self._text = text
+    }
+    
+    func makeNSView(context: Context) -> NSSecureTextField {
+        let field = NSSecureTextField()
+        field.placeholderString = placeholder
+        field.delegate = context.coordinator
+        field.isBordered = true
+        field.bezelStyle = .roundedBezel
+        field.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        return field
+    }
+    
+    func updateNSView(_ nsView: NSSecureTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        let parent: PasteableSecureField
+        init(_ parent: PasteableSecureField) { self.parent = parent }
+        
+        func controlTextDidChange(_ obj: Notification) {
+            if let field = obj.object as? NSTextField {
+                parent.text = field.stringValue
+            }
         }
     }
 }
