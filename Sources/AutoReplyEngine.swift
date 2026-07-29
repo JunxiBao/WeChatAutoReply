@@ -16,8 +16,19 @@ class AutoReplyEngine: ObservableObject {
     @Published var isSendingFirstMessage = false
     
     private var conversationHistory: [ChatPair] = []
+    
+    /// Set of message texts we have sent ourselves (trimmed).
+    /// Used as secondary safeguard in addition to the isFromMe flag.
     private var sentMessageTexts: Set<String> = []
-    private var lastSentMessage: String = ""  // raw text of last message we sent
+    
+    /// Fingerprint of the last incoming (non-me) message we processed.
+    /// Prevents re-processing the same message on the next poll cycle.
+    private var lastIncomingFingerprint: String = ""
+    
+    /// Guard flag: prevents concurrent checkMessages runs (e.g. timer fires while
+    /// a reply is still being generated / sent).
+    private var isProcessingMessage = false
+    
     private var pollingTimer: Timer?
     
     // MARK: - Settings
@@ -68,6 +79,7 @@ class AutoReplyEngine: ObservableObject {
     
     func stop() {
         isRunning = false; pollingTimer?.invalidate(); pollingTimer = nil
+        isProcessingMessage = false
         statusMessage = Loc.str("status.stopped")
     }
     
@@ -75,39 +87,71 @@ class AutoReplyEngine: ObservableObject {
     
     private func checkMessages() async {
         guard isRunning else { return }
+        // Prevent concurrent runs: if we're already generating/sending, skip this poll tick.
+        guard !isProcessingMessage else { return }
+        
         if workHoursEnabled, let start = workHoursStart, let end = workHoursEnd {
             let hour = Calendar.current.component(.hour, from: Date())
-            if start <= end { if hour < start || hour >= end { statusMessage = Loc.str("status.work_hours"); return } }
-            else { if hour < start && hour >= end { statusMessage = Loc.str("status.work_hours"); return } }
+            // Normal range e.g. 9–23: block if hour is outside [start, end)
+            if start <= end {
+                if hour < start || hour >= end { statusMessage = Loc.str("status.work_hours"); return }
+            } else {
+                // Cross-midnight range e.g. 22–7: ALLOW if hour >= start OR hour < end
+                // Block (return) if hour is in the gap: hour < start AND hour >= end
+                if hour >= end && hour < start { statusMessage = Loc.str("status.work_hours"); return }
+            }
         }
         statusMessage = Loc.str("status.checking")
         lastCheckTime = Date()
         currentChatName = bridge.getCurrentChatName() ?? Loc.str("status.unknown_chat")
         
-        var messages = bridge.getCurrentChatMessages()
-        guard !messages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
+        let allMessages = bridge.getCurrentChatMessages()
+        guard !allMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
-        // Only filter our own sent messages, nothing else
-        messages = messages.filter { msg in
-            let t = msg.trimmingCharacters(in: .whitespacesAndNewlines)
-            if sentMessageTexts.contains(t) { return false }
-            // Also check the raw last message (belt and suspenders)
-            if !lastSentMessage.isEmpty && (msg == lastSentMessage || t == lastSentMessage.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                return false
-            }
-            return true
+        // Step 1: Filter to only messages from the other person (not from me).
+        // This is the primary defense against replying to our own messages.
+        let incomingMessages = allMessages.filter { msg in
+            // Primary filter: AX-detected sender
+            guard !msg.isFromMe else { return false }
+            // Secondary filter: check against our sent texts cache (handles edge cases)
+            let trimmed = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !sentMessageTexts.contains(trimmed)
         }
-        guard !messages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
-        if messages.count > 1 {
-            statusMessage = Loc.f("status.multi_msgs", messages.count)
-            await processMessage(messages.joined(separator: "\n---\n"), messageCount: messages.count)
-        } else {
-            await processMessage(messages[0], messageCount: 1)
+        guard !incomingMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
+        
+        // Step 2: Check if there are NEW incoming messages since last poll.
+        // Compute a fingerprint from the last incoming message (text + count).
+        // If the fingerprint hasn't changed, the same messages are still on screen → skip.
+        let fingerprint = computeFingerprint(incomingMessages)
+        guard fingerprint != lastIncomingFingerprint else {
+            statusMessage = Loc.str("status.no_new")
+            return
         }
+        
+        // New incoming messages detected - update fingerprint and process.
+        // Only send the LAST message to the AI — visible messages include old history;
+        // replying to all of them at once would confuse the AI and flood the conversation.
+        lastIncomingFingerprint = fingerprint
+        await processMessage(incomingMessages[incomingMessages.count - 1].text, messageCount: 1)
+    }
+    
+    /// Compute a stable fingerprint for a list of messages to detect changes.
+    /// Includes ALL visible incoming message texts so that:
+    /// - Same screen content → same fingerprint → skip (no duplicate reply)
+    /// - Contact sends same text again → count changes → different fingerprint → reply
+    /// - Contact sends different text → last text changes → different fingerprint → reply
+    private func computeFingerprint(_ messages: [WeChatMessage]) -> String {
+        // Join all texts with a separator unlikely to appear in normal messages.
+        // Using count + all texts makes it robust against same-last-text collisions.
+        let allTexts = messages.map { $0.text }.joined(separator: "\u{0}")
+        return "\(messages.count)|\(allTexts)"
     }
     
     private func processMessage(_ message: String, messageCount: Int = 1) async {
+        isProcessingMessage = true
+        defer { isProcessingMessage = false }
+        
         let label = messageCount > 1 ? String(format: Loc.str("status.n_msgs"), messageCount) : Loc.str("status.msg")
         if Double.random(in: 0...1) < skipProbability {
             statusMessage = String(format: Loc.str("status.skip"), label)
@@ -122,7 +166,10 @@ class AutoReplyEngine: ObservableObject {
             guard !reply.isEmpty, isRunning else { return }
             statusMessage = Loc.f("status.generated", reply.count)
             
-            let delayInt = Int(Double.random(in: minReplyDelay...maxReplyDelay))
+            // Safe random range: ensure min <= max to avoid runtime crash
+            let safeMin = min(minReplyDelay, maxReplyDelay)
+            let safeMax = max(minReplyDelay, maxReplyDelay)
+            let delayInt = Int(Double.random(in: safeMin...safeMax))
             for remaining in stride(from: delayInt, through: 1, by: -1) {
                 guard isRunning else { return }
                 statusMessage = Loc.f("status.countdown", remaining)
@@ -130,9 +177,10 @@ class AutoReplyEngine: ObservableObject {
             }
             guard isRunning else { return }
             
+            // Register the reply in our sent-texts cache BEFORE sending,
+            // so the next poll won't accidentally pick it up.
             let trimmedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
             sentMessageTexts.insert(trimmedReply)
-            lastSentMessage = reply
             
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
@@ -142,9 +190,13 @@ class AutoReplyEngine: ObservableObject {
                 conversationHistory.append(ChatPair(incoming: message, outgoing: reply))
                 if conversationHistory.count > 20 { conversationHistory = Array(conversationHistory.suffix(20)) }
                 statusMessage = Loc.f("status.reply", processedCount)
+                // Do NOT reset lastIncomingFingerprint here.
+                // The fingerprint was already set to the current screen state in checkMessages().
+                // Resetting to "" would cause the next poll to re-process the same old
+                // messages still visible on screen. The fingerprint will naturally update
+                // when the contact sends a new message (count or text will change).
             } else {
                 sentMessageTexts.remove(trimmedReply)
-                lastSentMessage = ""
                 statusMessage = Loc.str("status.failed")
             }
         } catch {
@@ -160,7 +212,7 @@ class AutoReplyEngine: ObservableObject {
         isSendingFirstMessage = true; defer { isSendingFirstMessage = false }
         statusMessage = Loc.str("status.generating")
         currentChatName = bridge.getCurrentChatName() ?? "?"
-        let ctx = bridge.getCurrentChatMessages().suffix(5).joined(separator: " | ")
+        let ctx = bridge.getCurrentChatMessages().suffix(5).map { $0.text }.joined(separator: " | ")
         
         do {
             let reply = try await deepseek.generateFirstMessage(contactName: currentChatName ?? "?", recentContext: ctx)
@@ -170,8 +222,8 @@ class AutoReplyEngine: ObservableObject {
                 statusMessage = Loc.f("status.countdown", remaining)
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
-            sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
-            lastSentMessage = reply
+            let trimmedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+            sentMessageTexts.insert(trimmedReply)
             statusMessage = Loc.str("status.typing")
             let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
             if success {
@@ -179,9 +231,9 @@ class AutoReplyEngine: ObservableObject {
                 AppLogger.shared.log(Loc.str("log.sent"), message: reply)
                 conversationHistory.append(ChatPair(incoming: "", outgoing: reply))
                 statusMessage = Loc.f("status.sent", processedCount)
+                lastIncomingFingerprint = ""
             } else {
-                sentMessageTexts.remove(reply.trimmingCharacters(in: .whitespacesAndNewlines))
-                lastSentMessage = ""
+                sentMessageTexts.remove(trimmedReply)
                 statusMessage = Loc.str("status.failed")
             }
         } catch {
@@ -192,7 +244,7 @@ class AutoReplyEngine: ObservableObject {
     func resetConversationHistory() {
         conversationHistory.removeAll()
         sentMessageTexts.removeAll()
-        lastSentMessage = ""
+        lastIncomingFingerprint = ""
     }
 }
 

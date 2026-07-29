@@ -156,6 +156,13 @@ class Loc {
         "log.skip": "Skip",
         "log.error": "Error",
         "log.received": "Received %@",
+        
+        "menu.undo": "Undo",
+        "menu.redo": "Redo",
+        "menu.cut": "Cut",
+        "menu.copy": "Copy",
+        "menu.paste": "Paste",
+        "menu.select_all": "Select All",
     ]
     
     // MARK: - Chinese Strings
@@ -269,6 +276,13 @@ class Loc {
         "log.skip": "跳过",
         "log.error": "错误",
         "log.received": "收到%@",
+        
+        "menu.undo": "撤销",
+        "menu.redo": "重做",
+        "menu.cut": "剪切",
+        "menu.copy": "拷贝",
+        "menu.paste": "粘贴",
+        "menu.select_all": "全选",
     ]
     
     // MARK: - Convenience

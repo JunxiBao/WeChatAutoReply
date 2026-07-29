@@ -61,8 +61,9 @@ class DeepSeekClient {
             ["role": "system", "content": effectivePrompt(for: contactName)]
         ]
         
-        // Add conversation history for context
-        for pair in conversationHistory.suffix(10) { // Last 10 messages for context
+        // Add conversation history for context (skip pairs where we proactively sent first)
+        for pair in conversationHistory.suffix(10) {
+            guard !pair.incoming.isEmpty else { continue } // skip proactive-send entries
             messages.append(["role": "user", "content": pair.incoming])
             if !pair.outgoing.isEmpty {
                 messages.append(["role": "assistant", "content": pair.outgoing])
