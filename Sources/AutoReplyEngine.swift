@@ -16,7 +16,9 @@ class AutoReplyEngine: ObservableObject {
     @Published var isSendingFirstMessage = false
     
     private var conversationHistory: [ChatPair] = []
-    private var lastSeenMessageTexts: Set<String> = []
+    private var lastSeenMessages: [String] = []
+    private var lastSeenSet: Set<String> = []
+    private let maxSeenMessages = 50
     private var sentMessageTexts: Set<String> = []
     private var isFirstPoll = true
     private var pollingTimer: Timer?
@@ -88,14 +90,14 @@ class AutoReplyEngine: ObservableObject {
         let rawMessages = bridge.getCurrentChatMessages()
         if isFirstPoll {
             isFirstPoll = false
-            for msg in rawMessages { lastSeenMessageTexts.insert(msg) }
+            for msg in rawMessages { addSeen(msg) }
             statusMessage = Loc.f("status.history", rawMessages.count)
             return
         }
         guard !rawMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
-        let newMessages = rawMessages.filter { !lastSeenMessageTexts.contains($0) }
-        for msg in rawMessages { lastSeenMessageTexts.insert(msg) }
+        let newMessages = rawMessages.filter { !lastSeenSet.contains($0) }
+        for msg in rawMessages { addSeen(msg) }
         
         let filtered = newMessages.filter { text in
             let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -196,8 +198,21 @@ class AutoReplyEngine: ObservableObject {
     }
     
     func resetConversationHistory() {
-        conversationHistory.removeAll(); lastSeenMessageTexts.removeAll()
-        sentMessageTexts.removeAll(); isFirstPoll = true
+        conversationHistory.removeAll()
+        lastSeenMessages.removeAll()
+        lastSeenSet.removeAll()
+        sentMessageTexts.removeAll()
+        isFirstPoll = true
+    }
+    
+    private func addSeen(_ msg: String) {
+        if lastSeenSet.contains(msg) { return }
+        lastSeenMessages.append(msg)
+        lastSeenSet.insert(msg)
+        while lastSeenMessages.count > maxSeenMessages {
+            let removed = lastSeenMessages.removeFirst()
+            lastSeenSet.remove(removed)
+        }
     }
 }
 
