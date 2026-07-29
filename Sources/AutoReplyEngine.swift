@@ -156,21 +156,27 @@ class AutoReplyEngine: ObservableObject {
         
         guard !filtered.isEmpty else { statusMessage = "无新消息"; return }
         
-        for message in filtered {
-            guard isRunning else { break }
-            await processMessage(message)
-            try? await Task.sleep(nanoseconds: 500_000_000)
+        // If multiple new messages, combine into one context-aware reply
+        if filtered.count > 1 {
+            statusMessage = "收到 \(filtered.count) 条新消息"
+            let combined = filtered.joined(separator: "\n---\n")
+            await processMessage(combined, messageCount: filtered.count)
+        } else {
+            await processMessage(filtered[0], messageCount: 1)
         }
     }
     
-    private func processMessage(_ message: String) async {
+    private func processMessage(_ message: String, messageCount: Int = 1) async {
+        let label = messageCount > 1 ? "\(messageCount)条消息" : "消息"
+        
         if Double.random(in: 0...1) < skipProbability {
-            statusMessage = "跳过回复 (概率)"
+            statusMessage = "跳过回复 - \(label)"
             AppLogger.shared.log("跳过", message: message)
             return
         }
         
-        statusMessage = "生成回复..."
+        statusMessage = "AI 思考中..."
+        AppLogger.shared.log("收到\(label)", message: message.prefix(100).description)
         
         do {
             let reply = try await deepseek.generateReply(
@@ -181,13 +187,21 @@ class AutoReplyEngine: ObservableObject {
             
             guard !reply.isEmpty, isRunning else { return }
             
+            statusMessage = "已生成回复 (\(reply.count)字)"
+            
             let delay = Double.random(in: minReplyDelay...maxReplyDelay)
-            statusMessage = "\(Int(delay))秒后回复..."
-            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            let delayInt = Int(delay)
+            
+            // Countdown status
+            for remaining in stride(from: delayInt, through: 1, by: -1) {
+                guard isRunning else { return }
+                statusMessage = "\(remaining)秒后回复..."
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
             
             guard isRunning else { return }
             
-            statusMessage = "输入中..."
+            statusMessage = "正在输入..."
             let success = bridge.sendMessageHumanLike(reply)
             
             if success {
@@ -198,7 +212,7 @@ class AutoReplyEngine: ObservableObject {
                 if conversationHistory.count > 20 { conversationHistory = Array(conversationHistory.suffix(20)) }
                 statusMessage = "已回复 (\(processedCount) 条)"
             } else {
-                statusMessage = "发送失败 - 找不到输入框"
+                statusMessage = "发送失败"
             }
         } catch {
             statusMessage = "错误: \(error.localizedDescription)"
@@ -226,10 +240,13 @@ class AutoReplyEngine: ObservableObject {
             guard !reply.isEmpty else { return }
             
             let delay = Double.random(in: 1.0...3.0)
-            statusMessage = "\(Int(delay))秒后发送..."
-            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            let delayInt = Int(delay)
+            for remaining in stride(from: delayInt, through: 1, by: -1) {
+                statusMessage = "\(remaining)秒后发送..."
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
             
-            statusMessage = "输入中..."
+            statusMessage = "正在输入..."
             let success = bridge.sendMessageHumanLike(reply)
             
             if success {

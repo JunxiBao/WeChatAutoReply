@@ -70,7 +70,8 @@ class DeepSeekClient {
         }
         
         // Add the current message
-        messages.append(["role": "user", "content": "Incoming message from \(contactName): \(message)\n\nGenerate a reply following the system instructions above."])
+        let label = conversationHistory.isEmpty ? "" : " (context above)"
+        messages.append(["role": "user", "content": "Incoming message\(label) from \(contactName): \(message)\n\nGenerate a single concise reply following the system instructions."])
         
         let requestBody: [String: Any] = [
             "model": model,
