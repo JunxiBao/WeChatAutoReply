@@ -141,7 +141,8 @@ class AutoReplyEngine: ObservableObject {
             guard isRunning else { return }
             
             statusMessage = Loc.str("status.typing")
-            if bridge.sendMessageHumanLike(reply) {
+            let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
+            if success {
                 processedCount += 1
                 sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
                 AppLogger.shared.log(Loc.str("log.reply"), message: reply)
@@ -173,7 +174,8 @@ class AutoReplyEngine: ObservableObject {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
             statusMessage = Loc.str("status.typing")
-            if bridge.sendMessageHumanLike(reply) {
+            let success = await Task.detached { [bridge] in bridge.sendMessageHumanLike(reply) }.value
+            if success {
                 processedCount += 1
                 sentMessageTexts.insert(reply.trimmingCharacters(in: .whitespacesAndNewlines))
                 AppLogger.shared.log(Loc.str("log.sent"), message: reply)

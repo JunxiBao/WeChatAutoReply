@@ -168,91 +168,56 @@ class WeChatBridge {
         }
         let weChatPID = weChat.processIdentifier
         
-        // Force WeChat to front
         weChat.unhide()
         weChat.activate()
         Thread.sleep(forTimeInterval: 0.8)
         
-        // Retry finding input field up to 3 times
-        var inputField: AXUIElement?
+        var input: AXUIElement?
         for attempt in 1...3 {
-            inputField = findInputField()
-            if inputField != nil { break }
+            input = findInputField()
+            if input != nil { break }
             print("[WeChatBridge] Input field not found, retry \(attempt)/3")
             Thread.sleep(forTimeInterval: 0.5)
         }
-        
-        guard let input = inputField else {
+        guard let inputField = input else {
             print("[WeChatBridge] No input field after 3 retries")
             return false
         }
-        
-        // Focus the input field via accessibility
-        AXUIElementSetAttributeValue(input, "AXFocused" as CFString, kCFBooleanTrue)
-        Thread.sleep(forTimeInterval: 0.2)
-        
-        // Clear existing text - Cmd+A then Delete
-        let source = CGEventSource(stateID: .hidSystemState)
-        
-        // Cmd+A (select all)
-        if let cmdA = CGEvent(keyboardEventSource: source, virtualKey: 0x00, keyDown: true) {
-            cmdA.flags = .maskCommand
-            cmdA.postToPid(weChatPID)
-        }
-        Thread.sleep(forTimeInterval: 0.05)
-        if let cmdAUp = CGEvent(keyboardEventSource: source, virtualKey: 0x00, keyDown: false) {
-            cmdAUp.flags = .maskCommand  // mirrors keyDown
-            cmdAUp.postToPid(weChatPID)
-        }
-        Thread.sleep(forTimeInterval: 0.08)
-        
-        // Delete
-        if let del = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: true) {
-            del.postToPid(weChatPID)
-        }
-        Thread.sleep(forTimeInterval: 0.05)
-        if let delUp = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: false) {
-            delUp.postToPid(weChatPID)
-        }
-        Thread.sleep(forTimeInterval: 0.1)
-        
-        // Type each character with random delays
-        for char in text {
-            let delay = Double.random(in: 0.05...0.20)
-            Thread.sleep(forTimeInterval: delay)
             
-            // Occasional thinking pause
-            if Double.random(in: 0...1) < 0.1 {
-                Thread.sleep(forTimeInterval: Double.random(in: 0.3...0.8))
+            AXUIElementSetAttributeValue(inputField, "AXFocused" as CFString, kCFBooleanTrue)
+            Thread.sleep(forTimeInterval: 0.2)
+            
+            let source = CGEventSource(stateID: .hidSystemState)
+            
+            // Cmd+A
+            if let e = CGEvent(keyboardEventSource: source, virtualKey: 0x00, keyDown: true) { e.flags = .maskCommand; e.postToPid(weChatPID) }
+            Thread.sleep(forTimeInterval: 0.05)
+            if let e = CGEvent(keyboardEventSource: source, virtualKey: 0x00, keyDown: false) { e.flags = .maskCommand; e.postToPid(weChatPID) }
+            Thread.sleep(forTimeInterval: 0.08)
+            // Delete
+            if let e = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: true) { e.postToPid(weChatPID) }
+            Thread.sleep(forTimeInterval: 0.05)
+            if let e = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: false) { e.postToPid(weChatPID) }
+            Thread.sleep(forTimeInterval: 0.1)
+            
+            // Type each character
+            for char in text {
+                Thread.sleep(forTimeInterval: Double.random(in: 0.05...0.20))
+                if Double.random(in: 0...1) < 0.1 { Thread.sleep(forTimeInterval: Double.random(in: 0.3...0.8)) }
+                var chars = Array(String(char).utf16)
+                if let e = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) { e.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: &chars); e.postToPid(weChatPID) }
+                Thread.sleep(forTimeInterval: Double.random(in: 0.01...0.04))
+                if let e = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) { e.postToPid(weChatPID) }
             }
             
-            let str = String(char)
-            var chars = Array(str.utf16)
+            Thread.sleep(forTimeInterval: Double.random(in: 0.5...1.5))
             
-            if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
-                keyDown.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: &chars)
-                keyDown.postToPid(weChatPID)
-            }
-            Thread.sleep(forTimeInterval: Double.random(in: 0.01...0.04))
+            // Enter
+            if let e = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true) { e.postToPid(weChatPID) }
+            Thread.sleep(forTimeInterval: 0.05)
+            if let e = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false) { e.postToPid(weChatPID) }
             
-            if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
-                keyUp.postToPid(weChatPID)
-            }
-        }
-        
-        // Pause before sending (like reviewing)
-        Thread.sleep(forTimeInterval: Double.random(in: 0.5...1.5))
-        
-        // Press Enter
-        if let enter = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true) {
-            enter.postToPid(weChatPID)
-        }
-        Thread.sleep(forTimeInterval: 0.05)
-        if let enterUp = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false) {
-            enterUp.postToPid(weChatPID)
-        }
-        
-        return true
+            return true
     }
 }
 
