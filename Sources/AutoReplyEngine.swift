@@ -121,11 +121,14 @@ class AutoReplyEngine: ObservableObject {
             return
         }
         
+        // Extract newly arrived messages before updating lastSeenAllTexts
+        let newMessages = extractNewMessages(current: allMessages, lastSeen: lastSeenAllTexts)
+        
         // Chat updated! Save state
         lastSeenAllTexts = currentAllTexts
         
         // 2. Filter out messages the AI already sent
-        let incomingMessages = allMessages.filter { msg in
+        let incomingMessages = newMessages.filter { msg in
             let trimmed = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return !sentMessageTexts.contains(trimmed)
         }
@@ -140,8 +143,9 @@ class AutoReplyEngine: ObservableObject {
             return
         }
         
-        // 4. Process the latest incoming message
-        await processMessage(incomingMessages[incomingMessages.count - 1].text, messageCount: 1)
+        // 4. Combine multiple new messages into one prompt
+        let combinedText = incomingMessages.map { $0.text }.joined(separator: "\n")
+        await processMessage(combinedText, messageCount: incomingMessages.count)
     }
     
     private func hasNewMessagesAtBottom(current: [String], lastSeen: [String]) -> Bool {
@@ -157,6 +161,30 @@ class AutoReplyEngine: ObservableObject {
         }
         
         return true
+    }
+    
+    private func extractNewMessages(current: [WeChatMessage], lastSeen: [String]) -> [WeChatMessage] {
+        if lastSeen.isEmpty { return current }
+        
+        let currentTexts = current.map { $0.text }
+        if currentTexts == lastSeen { return [] }
+        
+        let maxOverlap = min(lastSeen.count, currentTexts.count)
+        for overlapLen in stride(from: maxOverlap, through: 1, by: -1) {
+            let lastSeenSuffix = lastSeen.suffix(overlapLen)
+            let currentPrefix = currentTexts.prefix(overlapLen)
+            
+            if Array(lastSeenSuffix) == Array(currentPrefix) {
+                return Array(current.dropFirst(overlapLen))
+            }
+        }
+        
+        // No overlap found (e.g. completely switched chats or scrolled heavily).
+        // Fallback to old behavior: just return the last message if any.
+        if let last = current.last {
+            return [last]
+        }
+        return []
     }
     
     private func processMessage(_ message: String, messageCount: Int = 1) async {
