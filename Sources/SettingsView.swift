@@ -181,7 +181,6 @@ struct SettingsView: View {
                         }.padding(.vertical, 2)
                     }
                 } header: { Text(String(format: Loc.str("contact.section_list"), contactPrompts.count)).fontWeight(.semibold) }
-                Text(Loc.str("contact.edit_hint")).font(.caption).foregroundColor(.secondary).padding(.horizontal)
             }
         }.formStyle(.grouped)
         .onAppear {
