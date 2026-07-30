@@ -1,5 +1,9 @@
 # WeChat Auto Reply
 
+<p align="center">
+  <img src="Resources/AppIcon.png" width="128" height="128" alt="WeChat Auto Reply App Icon">
+</p>
+
 > **macOS only.** Automatically read and reply to WeChat messages using macOS Accessibility API and DeepSeek AI.
 
 ## How It Works
@@ -14,9 +18,11 @@ This makes replies look natural and reduces the risk of detection.
 ## Features
 
 - **Human-like typing** — 50-200ms random delay per character, occasional thinking pauses
+- **Burst message handling** — intelligently handles multiple messages sent in rapid succession by waiting for the sender to finish
 - **Skip probability** — randomly ignore some messages to avoid replying to everything
 - **Work hours** — only auto-reply during specified hours
-- **Custom system prompt** — control tone, style, and behavior of replies
+- **Per-contact system prompts** — control tone, style, and behavior of replies globally or individually for different contacts
+- **Model language control** — seamlessly force the AI model to reply in a specific language (e.g., Chinese, English)
 - **Proactive mode** — let AI send the first message to start a conversation
 - **Conversation memory** — keeps context from recent messages (last 20 rounds)
 
@@ -63,6 +69,8 @@ The app will be installed to `/Applications/WeChatAutoReply.app`.
 | Max reply delay | 15s | Maximum wait before replying |
 | Skip probability | 20% | Chance to randomly skip a message |
 | Work hours | Off | Only auto-reply during set hours |
+| Model Language | Chinese | Output language setting for the AI model |
+| System Prompt | Default | Customize prompt per-contact for varied personalities |
 
 ## System Prompt (Recommended)
 
