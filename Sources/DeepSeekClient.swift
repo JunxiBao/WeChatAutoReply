@@ -20,8 +20,7 @@ class DeepSeekClient {
     
     var systemPrompt: String {
         get {
-            UserDefaults.standard.string(forKey: "reply_system_prompt") ??
-            "你是一个真实的人，正在帮朋友回复微信消息。回复要简洁、自然、有人情味。不要透露你是AI。"
+            UserDefaults.standard.string(forKey: "reply_system_prompt") ?? Loc.str("prompt.default")
         }
         set { UserDefaults.standard.set(newValue, forKey: "reply_system_prompt") }
     }

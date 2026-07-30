@@ -223,7 +223,7 @@ class Loc {
         "label.limit_hours": "限制工作时间",
         "label.from": "从",
         "label.to": "到",
-        "label.language": "模型语言",
+        "label.language": "语言",
         
         "btn.start": "启动",
         "btn.stop": "停止",

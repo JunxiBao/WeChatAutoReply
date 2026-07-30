@@ -108,9 +108,22 @@ class AutoReplyEngine: ObservableObject {
         }
         statusMessage = Loc.str("status.checking")
         lastCheckTime = Date()
-        currentChatName = bridge.getCurrentChatName() ?? Loc.str("status.unknown_chat")
         
+        let newChatName = bridge.getCurrentChatName() ?? Loc.str("status.unknown_chat")
         let allMessages = bridge.getCurrentChatMessages()
+        
+        if let current = currentChatName, current != newChatName {
+            // Chat switched! Clear memory to avoid crossing contexts
+            conversationHistory.removeAll()
+            sentMessageTexts.removeAll()
+            // Baseline the new chat so we don't reply to its existing messages
+            lastSeenAllTexts = allMessages.map { $0.text }
+            currentChatName = newChatName
+            statusMessage = Loc.str("status.no_new")
+            return
+        }
+        currentChatName = newChatName
+        
         guard !allMessages.isEmpty else { statusMessage = Loc.str("status.no_new"); return }
         
         let currentAllTexts = allMessages.map { $0.text }
